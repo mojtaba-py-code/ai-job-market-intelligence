@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-COPY data ./data
 
 # Build a wheel and install it into an isolated prefix we can copy over.
+# The skill taxonomy and sample data ship inside the package, so no top-level
+# data directory needs to be copied here.
 RUN pip install --upgrade pip build \
     && pip wheel --wheel-dir /wheels ".[postgres]"
 
@@ -41,7 +42,8 @@ WORKDIR /app
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/*.whl && rm -rf /wheels
 
-COPY --chown=appuser:appuser data ./data
+# Writable runtime dir for the SQLite quick-start (Postgres is used in prod).
+RUN mkdir -p /app/data/runtime && chown -R appuser:appuser /app/data
 
 USER appuser
 EXPOSE 8000
