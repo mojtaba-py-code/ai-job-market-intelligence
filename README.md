@@ -1,5 +1,12 @@
 # AI-Powered Job Market Intelligence Platform
 
+[![CI](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-async-009688.svg)](https://fastapi.tiangolo.com)
+[![Code style: ruff](https://img.shields.io/badge/lint-ruff-black.svg)](https://github.com/astral-sh/ruff)
+[![Types: mypy](https://img.shields.io/badge/types-mypy-blue.svg)](https://mypy-lang.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A production-grade platform that ingests publicly available job postings from
 multiple sources, normalises and de-duplicates them, extracts skills and
 technologies with an NLP pipeline, powers **semantic search** and **resume
