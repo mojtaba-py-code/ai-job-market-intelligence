@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JMI — Job Market Intelligence</title>
+  <style>
+    :root {
+      --bg: #0f172a; --panel: #1e293b; --panel-2: #263449;
+      --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --bar: #38bdf8;
+      --good: #34d399; --border: #334155;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f1f5f9; --panel: #ffffff; --panel-2: #f8fafc;
+        --text: #0f172a; --muted: #475569; --accent: #0284c7; --bar: #0ea5e9;
+        --good: #059669; --border: #e2e8f0;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--text); }
+    header { padding: 24px 32px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    header h1 { font-size: 20px; margin: 0; letter-spacing: .3px; }
+    header .sub { color: var(--muted); font-size: 13px; }
+    a { color: var(--accent); }
+    main { padding: 24px 32px; max-width: 1200px; margin: 0 auto; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .kpi .value { font-size: 30px; font-weight: 700; }
+    .kpi .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card h2 { font-size: 15px; margin: 0 0 16px; }
+    .bar-row { display: grid; grid-template-columns: 130px 1fr 42px; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 13px; }
+    .bar-row .name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { background: var(--panel-2); border-radius: 6px; height: 10px; overflow: hidden; }
+    .bar-fill { background: var(--bar); height: 100%; border-radius: 6px; }
+    .count { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+    .pill { background: var(--panel-2); color: var(--muted); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+    .empty { color: var(--muted); font-size: 13px; }
+    footer { padding: 24px 32px; color: var(--muted); font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Job Market Intelligence</h1>
+      <div class="sub">Live analytics from the ingestion pipeline · <a href="/docs">API docs</a></div>
+    </div>
+    <div class="sub" id="status">Loading…</div>
+  </header>
+
+  <main>
+    <section class="kpis" id="kpis"></section>
+    <section class="grid">
+      <div class="card"><h2>Most in-demand skills</h2><div id="skills"></div></div>
+      <div class="card"><h2>Programming languages</h2><div id="languages"></div></div>
+      <div class="card"><h2>Frameworks</h2><div id="frameworks"></div></div>
+      <div class="card"><h2>Databases</h2><div id="databases"></div></div>
+      <div class="card"><h2>Cloud providers</h2><div id="cloud"></div></div>
+      <div class="card"><h2>Top hiring companies</h2><div id="companies"></div></div>
+      <div class="card"><h2>Top countries</h2><div id="countries"></div></div>
+      <div class="card"><h2>Average salary by currency</h2><div id="salary"></div></div>
+    </section>
+    <section class="card" style="margin-top:20px">
+      <h2>Recent jobs</h2>
+      <div id="recent"><div class="empty">Loading…</div></div>
+    </section>
+  </main>
+
+  <footer>JMI Platform · built with FastAPI, SQLAlchemy &amp; a rule-based NLP pipeline</footer>
+
+  <script>
+    const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    function renderBars(elId, items) {
+      const el = document.getElementById(elId);
+      if (!items || !items.length) { el.innerHTML = '<div class="empty">No data yet.</div>'; return; }
+      const max = Math.max(...items.map((i) => i.count));
+      el.innerHTML = items.map((i) => {
+        const pct = max ? Math.round((i.count / max) * 100) : 0;
+        return `<div class="bar-row"><span class="name" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>`
+          + `<span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>`
+          + `<span class="count">${i.count}</span></div>`;
+      }).join("");
+    }
+
+    function renderSalary(items) {
+      const el = document.getElementById("salary");
+      if (!items || !items.length) { el.innerHTML = '<div class="empty">No salary data.</div>'; return; }
+      el.innerHTML = '<table><tr><th>Currency</th><th>Avg</th><th>Median</th><th>Jobs</th></tr>'
+        + items.map((s) => `<tr><td>${escapeHtml(s.currency)}</td>`
+          + `<td>${s.avg.toLocaleString()}</td><td>${s.median.toLocaleString()}</td>`
+          + `<td>${s.count}</td></tr>`).join("") + "</table>";
+    }
+
+    function renderRecent(items) {
+      const el = document.getElementById("recent");
+      if (!items || !items.length) { el.innerHTML = '<div class="empty">No jobs yet. Run an ingest first.</div>'; return; }
+      el.innerHTML = '<table><tr><th>Title</th><th>Company</th><th>Location</th><th>Remote</th><th>Skills</th></tr>'
+        + items.map((j) => {
+          const loc = [j.city, j.country].filter(Boolean).join(", ");
+          const skills = (j.skills || []).slice(0, 4).map((s) => `<span class="pill">${escapeHtml(s.name)}</span>`).join(" ");
+          return `<tr><td>${escapeHtml(j.title)}</td><td>${escapeHtml(j.company)}</td>`
+            + `<td>${escapeHtml(loc)}</td><td>${escapeHtml(j.remote_status)}</td><td>${skills}</td></tr>`;
+        }).join("") + "</table>";
+    }
+
+    function renderKpis(report) {
+      const kpis = [
+        { value: report.total_jobs, label: "Total jobs" },
+        { value: report.remote_percentage + "%", label: "Remote / hybrid" },
+        { value: (report.top_languages[0]?.name) || "—", label: "Top language" },
+        { value: (report.top_skills[0]?.name) || "—", label: "Top skill" },
+      ];
+      document.getElementById("kpis").innerHTML = kpis.map((k) =>
+        `<div class="kpi"><div class="value">${escapeHtml(k.value)}</div><div class="label">${escapeHtml(k.label)}</div></div>`
+      ).join("");
+    }
+
+    async function load() {
+      try {
+        const [report, jobs] = await Promise.all([
+          fetch("/api/v1/analytics/report").then((r) => r.json()),
+          fetch("/api/v1/jobs?limit=10").then((r) => r.json()),
+        ]);
+        renderKpis(report);
+        renderBars("skills", report.top_skills);
+        renderBars("languages", report.top_languages);
+        renderBars("frameworks", report.top_frameworks);
+        renderBars("databases", report.top_databases);
+        renderBars("cloud", report.top_cloud);
+        renderBars("companies", report.top_companies);
+        renderBars("countries", report.top_countries);
+        renderSalary(report.salary_by_currency);
+        renderRecent(jobs.items);
+        document.getElementById("status").textContent = report.total_jobs + " jobs indexed";
+      } catch (err) {
+        document.getElementById("status").textContent = "Failed to load data";
+        console.error(err);
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
