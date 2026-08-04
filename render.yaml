@@ -1,0 +1,35 @@
+# Render blueprint — free-tier live demo.
+#
+# The platform runs entirely on its light dependency set: no Postgres, Redis or
+# ML wheels required. Search falls back to the built-in pure-Python TF-IDF
+# backend, the database is SQLite, and `jmi seed` loads bundled offline demo
+# postings so the dashboard, search and analytics all have data on first load.
+#
+# Deploy: push to GitHub, then in Render -> "New +" -> "Blueprint" and pick this
+# repo. JMI_SECRET_KEY / admin password are generated automatically.
+services:
+  - type: web
+    name: ai-job-market-intelligence
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install --upgrade pip && pip install -e .
+    startCommand: python -m jmi seed && uvicorn jmi.api.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.5"
+      - key: JMI_ENV
+        value: production
+      - key: JMI_DEBUG
+        value: "false"
+      - key: JMI_SECRET_KEY
+        generateValue: true
+      - key: JMI_DATABASE_URL
+        value: sqlite:///./data/runtime/jmi.sqlite3
+      - key: JMI_CORS_ORIGINS
+        value: "*"
+      - key: JMI_ADMIN_EMAIL
+        value: admin@example.com
+      - key: JMI_ADMIN_PASSWORD
+        generateValue: true

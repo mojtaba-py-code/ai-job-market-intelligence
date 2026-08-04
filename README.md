@@ -19,6 +19,31 @@ secret hygiene, robots.txt-respecting crawling).
 
 ---
 
+## Live demo
+
+**One-click deploy** — no Postgres, Redis or ML wheels needed: search falls back
+to the built-in pure-Python TF-IDF backend, the database is SQLite, and `jmi
+seed` loads bundled offline demo postings so the dashboard, search and analytics
+all have data on first load.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/mojtaba-py-code/ai-job-market-intelligence)
+
+Once it is up, explore:
+
+- **`/`** — a self-contained analytics dashboard: total jobs, remote %, most
+  in-demand skills, languages/frameworks/databases/clouds, salary by currency,
+  and top hiring companies/countries.
+- **`/docs`** — interactive OpenAPI (Swagger UI); `/redoc` for ReDoc.
+- **`POST /api/v1/search/semantic`** — natural-language search, e.g.
+  `{"query": "remote python backend engineer", "limit": 5}`.
+- **`GET /api/v1/analytics/report`** — the JSON behind the dashboard.
+
+`JMI_SECRET_KEY` and the admin password are generated automatically by the
+[`render.yaml`](render.yaml) blueprint; the read-only endpoints above need no
+login. The free instance sleeps when idle, so the first request may take ~30s.
+
+---
+
 ## Highlights
 
 | Area | What it does |
