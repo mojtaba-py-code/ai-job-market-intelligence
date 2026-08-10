@@ -114,9 +114,15 @@ python -m jmi secret-key            # generate a strong secret
 
 ```bash
 export JMI_SECRET_KEY=$(python -m jmi secret-key)
+export POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+export REDIS_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 docker compose up --build -d
 # API on http://localhost:8000  (PostgreSQL + Redis included)
 ```
+
+The stack refuses to start without those passwords rather than falling back to a
+guessable default. PostgreSQL and Redis are reachable only on the internal
+compose network — they are deliberately not published to the host.
 
 ---
 
