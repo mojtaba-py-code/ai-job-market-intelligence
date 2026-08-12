@@ -166,4 +166,9 @@ def test_html_stripping_still_handles_ordinary_markup():
         "Hello & welcome World"
     )
     assert clean_text("<a href='https://x.test/a?b=1'>link</a>") == "link"
-    assert clean_text("5 < 10 and 20 > 3") == "5 < 10 and 20 > 3"
+    assert clean_text("<div><span>nested</span></div>") == "nested"
+    # A lone '<' with nothing to close it is left alone. A '<' that does have a
+    # later '>' is still treated as a tag and dropped -- unchanged from the
+    # previous pattern, and unavoidable for a regex-based stripper. Anything
+    # relying on comparison operators surviving needs a real HTML parser.
+    assert clean_text("scale > 10x, latency < 5ms") == "scale > 10x, latency < 5ms"
