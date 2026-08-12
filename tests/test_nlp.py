@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from jmi.domain.entities import JobPosting, Location
 from jmi.domain.enums import SkillKind
 from jmi.nlp import (
@@ -134,3 +136,34 @@ def test_custom_taxonomy_extractor():
 
     extractor = SkillExtractor(Taxonomy())
     assert any(s.kind is SkillKind.framework for s in extractor.extract("django app"))
+
+
+def test_clean_text_is_linear_on_repeated_tag_openers():
+    """A wall of '<' must not take quadratic time.
+
+    Description and resume text arrives from uploads and scraped pages, so the
+    input is attacker-controlled. Under the old ``<[^>]+>`` pattern 40k opening
+    brackets spent about three seconds purely backtracking -- a free denial of
+    service against any endpoint that cleans text. The bound is loose on
+    purpose: it measures the complexity class, not the machine.
+    """
+    start = time.perf_counter()
+    clean_text("<" * 40_000)
+    assert time.perf_counter() - start < 1.0
+
+
+def test_parse_resume_is_linear_on_repeated_local_part_characters():
+    """The same guarantee for the e-mail scan, which runs over the whole resume."""
+    start = time.perf_counter()
+    profile = parse_resume("%" * 40_000)
+    assert time.perf_counter() - start < 1.0
+    assert profile.email is None
+
+
+def test_html_stripping_still_handles_ordinary_markup():
+    """The linear pattern must not change the result for well-formed input."""
+    assert clean_text("<p>Hello&nbsp;&amp;   welcome</p>\n\n\n<b>World</b>") == (
+        "Hello & welcome World"
+    )
+    assert clean_text("<a href='https://x.test/a?b=1'>link</a>") == "link"
+    assert clean_text("5 < 10 and 20 > 3") == "5 < 10 and 20 > 3"

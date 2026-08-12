@@ -14,7 +14,12 @@ from dataclasses import dataclass, field
 from .cleaner import clean_text
 from .skills import SkillExtractor, get_default_extractor
 
-_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# The repeated parts are length-bounded on purpose. Unbounded `+` here is
+# quadratic on a resume that is one long run of local-part characters with no
+# `@` -- the engine retries the whole run from every offset. RFC 5321 caps the
+# local part at 64 and a domain label at 63, so the bounds cost nothing real
+# and turn the worst case back into a linear scan.
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}")
 _YEARS = re.compile(r"(\d{1,2})\+?\s*(?:years|yrs)\b", re.IGNORECASE)
 
 

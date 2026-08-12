@@ -7,7 +7,11 @@ import re
 import unicodedata
 
 _WHITESPACE = re.compile(r"\s+")
-_HTML_TAG = re.compile(r"<[^>]+>")
+# `<[^>]+>` looks equivalent but is quadratic on input like "<<<<<<<...": the
+# negated class matches `<` as well, so every opening bracket starts a candidate
+# run that scans to the end of the string before failing. Excluding `<` from the
+# body means a run can never span another tag opener, and the scan stays linear.
+_HTML_TAG = re.compile(r"<[^<>]+>")
 _MULTI_NEWLINE = re.compile(r"\n{3,}")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
