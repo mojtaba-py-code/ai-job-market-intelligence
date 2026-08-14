@@ -138,26 +138,45 @@ def test_custom_taxonomy_extractor():
     assert any(s.kind is SkillKind.framework for s in extractor.extract("django app"))
 
 
+def _growth_factor(work, char: str, base: int = 10_000, factor: int = 4) -> float:
+    """Return how much slower *work* gets when its input grows *factor* times.
+
+    Measuring the ratio rather than a wall-clock budget is what makes this
+    meaningful on a shared CI runner: an absolute "under one second" bound
+    passes or fails on how busy the machine is, while quadratic backtracking
+    shows up as a ratio near ``factor ** 2`` no matter how fast the box is.
+    Each size is measured a few times and the fastest run is kept, which is the
+    least noisy estimate when other work is competing for the CPU.
+    """
+
+    def best_of(size: int) -> float:
+        timings = []
+        for _ in range(3):
+            start = time.perf_counter()
+            work(char * size)
+            timings.append(time.perf_counter() - start)
+        return max(min(timings), 1e-6)  # floor: a zero would divide badly
+
+    return best_of(base * factor) / best_of(base)
+
+
 def test_clean_text_is_linear_on_repeated_tag_openers():
     """A wall of '<' must not take quadratic time.
 
     Description and resume text arrives from uploads and scraped pages, so the
     input is attacker-controlled. Under the old ``<[^>]+>`` pattern 40k opening
     brackets spent about three seconds purely backtracking -- a free denial of
-    service against any endpoint that cleans text. The bound is loose on
-    purpose: it measures the complexity class, not the machine.
+    service against any endpoint that cleans text. Quadratic would put the
+    growth factor near 16; the bound of 6 leaves room for constant overheads
+    without admitting anything super-linear.
     """
-    start = time.perf_counter()
-    clean_text("<" * 40_000)
-    assert time.perf_counter() - start < 1.0
+    assert _growth_factor(clean_text, "<") < 6.0
 
 
 def test_parse_resume_is_linear_on_repeated_local_part_characters():
     """The same guarantee for the e-mail scan, which runs over the whole resume."""
-    start = time.perf_counter()
-    profile = parse_resume("%" * 40_000)
-    assert time.perf_counter() - start < 1.0
-    assert profile.email is None
+    assert _growth_factor(parse_resume, "%") < 6.0
+    assert parse_resume("%" * 40_000).email is None
 
 
 def test_html_stripping_still_handles_ordinary_markup():
