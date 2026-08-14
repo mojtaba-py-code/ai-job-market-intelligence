@@ -184,8 +184,12 @@ thin transport layer. See [docs/architecture.md](docs/architecture.md).
 
 ## Security
 
-- **Secrets**: loaded from env only; the app refuses to boot in production with a
-  placeholder `JMI_SECRET_KEY`. `.env` is git-ignored; logs redact sensitive keys.
+- **Secrets**: loaded from env only. In production the app refuses to boot with
+  *any* placeholder credential — signing key, bootstrap admin e-mail or password
+  — not just the signing key, because `jmi seed` creates that admin account with
+  the `admin` role and its placeholder password is published in this repository.
+  `JMI_DEBUG=true` and a `*` CORS origin are refused in production too. `.env` is
+  git-ignored; logs redact sensitive keys.
 - **Auth**: JWT (PyJWT) access tokens; passwords hashed with bcrypt (per-password salt).
 - **Authorization**: role-based (`admin` / `analyst` / `viewer`); public
   registration can only create a `viewer` — no privilege escalation.
@@ -210,8 +214,8 @@ pytest --cov=jmi            # tests + coverage
 ```
 
 The suite runs against an in-memory SQLite database and mocked HTTP transports —
-no network, no external services. Current status: **83 tests, ~88% coverage**,
-`ruff` clean, `mypy` clean.
+no network, no external services. Current status: **98 tests, 88% coverage**,
+`ruff` clean, `mypy` clean, `bandit` clean, `pip-audit` clean — all enforced in CI.
 
 ---
 

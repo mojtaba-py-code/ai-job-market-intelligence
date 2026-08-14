@@ -49,6 +49,11 @@ services:
       JMI_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       JMI_API_PORT: "8000"
       JMI_CORS_ORIGINS: ${JMI_CORS_ORIGINS:-http://localhost:3000}
+      # `seed` below creates an admin-role account from these two values, so
+      # both are mandatory: a placeholder here would publish an administrator
+      # whose password is in this repository.
+      JMI_ADMIN_EMAIL: ${JMI_ADMIN_EMAIL:?set the bootstrap admin email in your .env}
+      JMI_ADMIN_PASSWORD: ${JMI_ADMIN_PASSWORD:?set a strong bootstrap admin password in your .env}
     ports:
       # The API is the only service meant to be reachable from outside.
       - "8000:8000"

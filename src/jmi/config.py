@@ -17,6 +17,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PLACEHOLDER_SECRET = "change-me-to-a-long-random-string"
+# A value the app refuses to run with in production, not a credential.
+_PLACEHOLDER_ADMIN_PASSWORD = "change-me-strong-password"
+_PLACEHOLDER_ADMIN_EMAIL = "admin@example.com"
+_MIN_ADMIN_PASSWORD_LENGTH = 12
 
 
 class Environment(str, Enum):
@@ -83,8 +87,12 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     # -- Bootstrap admin ----------------------------------------------------
-    admin_email: str = "admin@example.com"
-    admin_password: str = "change-me-strong-password"
+    # The seed command creates this user with the ``admin`` role. Both values
+    # are placeholders and are rejected outright in production (see
+    # ``_enforce_production_secrets``) so a deployment can never silently ship
+    # with the credentials printed in this repository.
+    admin_email: str = _PLACEHOLDER_ADMIN_EMAIL
+    admin_password: str = _PLACEHOLDER_ADMIN_PASSWORD
 
     # ---------------------------------------------------------------------
     @field_validator("cors_origins")
@@ -93,13 +101,36 @@ class Settings(BaseSettings):
         return value.strip()
 
     @model_validator(mode="after")
-    def _enforce_production_secret(self) -> Settings:
-        """A weak secret is fatal outside development."""
-        if self.env is Environment.production and self.secret_key in (
-            _PLACEHOLDER_SECRET,
-            "",
-        ):
-            raise ValueError("JMI_SECRET_KEY must be set to a strong random value in production.")
+    def _enforce_production_secrets(self) -> Settings:
+        """Refuse to start in production with any placeholder credential.
+
+        Every credential that has a development-friendly default is checked
+        here, not just the signing key: a deployment that sets a strong
+        ``JMI_SECRET_KEY`` but forgets the bootstrap admin password would
+        otherwise seed an ``admin``-role account whose password is published in
+        this repository.
+        """
+        if self.env is not Environment.production:
+            return self
+
+        problems: list[str] = []
+        if self.secret_key in (_PLACEHOLDER_SECRET, ""):
+            problems.append("JMI_SECRET_KEY must be set to a strong random value")
+        if self.admin_password in (_PLACEHOLDER_ADMIN_PASSWORD, ""):
+            problems.append("JMI_ADMIN_PASSWORD must not be the placeholder value")
+        elif len(self.admin_password) < _MIN_ADMIN_PASSWORD_LENGTH:
+            problems.append(
+                f"JMI_ADMIN_PASSWORD must be at least {_MIN_ADMIN_PASSWORD_LENGTH} characters"
+            )
+        if self.admin_email == _PLACEHOLDER_ADMIN_EMAIL:
+            problems.append("JMI_ADMIN_EMAIL must not be the placeholder value")
+        if "*" in self.cors_origin_list:
+            problems.append("JMI_CORS_ORIGINS must not be '*' while credentials are allowed")
+        if self.debug:
+            problems.append("JMI_DEBUG must be false")
+
+        if problems:
+            raise ValueError("Unsafe production configuration: " + "; ".join(problems) + ".")
         return self
 
     # -- Derived helpers ----------------------------------------------------
