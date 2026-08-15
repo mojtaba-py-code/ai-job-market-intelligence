@@ -8,12 +8,14 @@ from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..domain.enums import UserRole
 from ..exceptions import AuthenticationError, AuthorizationError
 from ..infrastructure.db.models import User
 from ..infrastructure.db.repositories import UserRepository
 from ..infrastructure.db.session import get_sessionmaker
 from ..infrastructure.security.tokens import TokenError, decode_access_token
+from .middleware import client_ip
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 
@@ -43,8 +45,14 @@ def get_current_user(
     except TokenError as exc:
         raise AuthenticationError(str(exc)) from exc
 
-    user_id = claims.get("sub")
-    user = UserRepository(session).get(int(user_id)) if user_id else None
+    try:
+        user_id = int(claims["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        # A well-formed signature with an unusable subject is still a bad token,
+        # not a server fault — answer 401 rather than surfacing a 500.
+        raise AuthenticationError("Invalid authentication token.") from exc
+
+    user = UserRepository(session).get(user_id)
     if user is None or not user.is_active:
         raise AuthenticationError("User not found or inactive.")
     return user
@@ -62,8 +70,10 @@ def require_role(*allowed: UserRole) -> Callable[..., User]:
 
 
 def client_identifier(request: Request) -> str:
-    """Best-effort client id for rate limiting (proxy-aware)."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "anonymous"
+    """Client id for per-caller accounting.
+
+    Delegates to :func:`jmi.api.middleware.client_ip`, which ignores
+    ``X-Forwarded-For`` unless the operator has declared how many trusted
+    proxies sit in front of the app.
+    """
+    return client_ip(request, trusted_proxy_hops=get_settings().trusted_proxy_hops)
