@@ -1,10 +1,12 @@
 # AI-Powered Job Market Intelligence Platform
 
 [![CI](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/ci.yml)
+[![Security](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/security.yml/badge.svg)](https://github.com/mojtaba-py-code/ai-job-market-intelligence/actions/workflows/security.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-async-009688.svg)](https://fastapi.tiangolo.com)
 [![Code style: ruff](https://img.shields.io/badge/lint-ruff-black.svg)](https://github.com/astral-sh/ruff)
 [![Types: mypy](https://img.shields.io/badge/types-mypy-blue.svg)](https://mypy-lang.org)
+[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen.svg)](#testing--quality)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A production-grade platform that ingests publicly available job postings from
@@ -55,7 +57,8 @@ login. The free instance sleeps when idle, so the first request may take ~30s.
 | **Analytics** | Top skills / languages / frameworks / databases / clouds, salary distribution, remote %, company / country / city rankings, monthly trends |
 | **API** | FastAPI with auth, RBAC, pagination, filtering, sorting, versioning (`/api/v1`), OpenAPI docs, export (CSV/JSON/Excel) |
 | **Dashboard** | Self-contained, theme-aware analytics dashboard served at `/` |
-| **Ops** | Docker + Compose, GitHub Actions CI, APScheduler (and optional Celery/Redis) scheduling, structured logging with secret redaction |
+| **Security** | JWT with issuer/audience binding, bcrypt, RBAC, proxy-aware rate limiting with a separate brute-force budget, nonce-based CSP, formula-injection-safe exports, fail-fast production config |
+| **Ops** | Docker + Compose, GitHub Actions CI and security scanning (pip-audit, Bandit, CodeQL, Gitleaks, Trivy), APScheduler (and optional Celery/Redis) scheduling, structured logging with secret redaction |
 
 ## Design philosophy: graceful degradation
 
@@ -114,25 +117,29 @@ python -m jmi secret-key            # generate a strong secret
 
 ```bash
 export JMI_SECRET_KEY=$(python -m jmi secret-key)
+export JMI_ADMIN_EMAIL=you@example.org
+export JMI_ADMIN_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
 export POSTGRES_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 export REDIS_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 docker compose up --build -d
 # API on http://localhost:8000  (PostgreSQL + Redis included)
 ```
 
-The stack refuses to start without those passwords rather than falling back to a
-guessable default. PostgreSQL and Redis are reachable only on the internal
-compose network — they are deliberately not published to the host.
+The stack runs with `JMI_ENV=production`, so every one of those is required
+rather than falling back to a guessable default — it refuses to start with
+placeholder credentials. PostgreSQL and Redis are reachable only on the internal
+compose network; they are deliberately not published to the host.
 
 ---
 
 ## Example API calls
 
 ```bash
-# Login (the seeded admin) and capture a token
+# Login (the seeded admin — credentials come from JMI_ADMIN_EMAIL /
+# JMI_ADMIN_PASSWORD in your .env) and capture a token
 TOKEN=$(curl -s -X POST localhost:8000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@example.com","password":"change-me-strong-password"}' \
+  -d "{\"email\":\"$JMI_ADMIN_EMAIL\",\"password\":\"$JMI_ADMIN_PASSWORD\"}" \
   | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 
 # Filtered, paginated listing
@@ -184,38 +191,76 @@ thin transport layer. See [docs/architecture.md](docs/architecture.md).
 
 ## Security
 
-- **Secrets**: loaded from env only. In production the app refuses to boot with
-  *any* placeholder credential — signing key, bootstrap admin e-mail or password
-  — not just the signing key, because `jmi seed` creates that admin account with
-  the `admin` role and its placeholder password is published in this repository.
-  `JMI_DEBUG=true` and a `*` CORS origin are refused in production too. `.env` is
-  git-ignored; logs redact sensitive keys.
-- **Auth**: JWT (PyJWT) access tokens; passwords hashed with bcrypt (per-password salt).
-- **Authorization**: role-based (`admin` / `analyst` / `viewer`); public
-  registration can only create a `viewer` — no privilege escalation.
-- **Transport hardening**: security headers middleware, configurable CORS, HSTS in
-  production, in-memory rate limiting (Redis-ready for multi-instance).
-- **Injection safety**: all DB access goes through the SQLAlchemy ORM
-  (parameterised); all input validated by Pydantic.
-- **Scraping ethics**: robots.txt is honoured, requests are rate-limited and
-  identify the bot; failures fail safe.
+The platform ingests data from **untrusted third-party job boards** and serves it
+over a public API, so scraped text is treated as hostile all the way through to
+export, and no request-supplied value is trusted for identity or authorisation.
 
-See [docs/developer-guide.md](docs/developer-guide.md#security-checklist).
+- **Secrets never become strings.** Every credential is a `SecretStr`, so a stray
+  `print(settings)` or a traceback yields `**********`; reading one takes an
+  explicit `.get_secret_value()`, which makes each use site greppable in review.
+  Structured logs redact sensitive keys, and `.env` is git-ignored.
+- **Unsafe production configurations refuse to boot.** *Any* placeholder
+  credential is fatal, not just the signing key — `jmi seed` creates the
+  bootstrap admin with the `admin` role, and its default password is published in
+  this repository. A short signing key, `JMI_DEBUG=true`, and wildcard CORS
+  combined with credentials are refused too, and every problem is reported at
+  once rather than one restart at a time.
+- **Authorization** is role-based (`admin` / `analyst` / `viewer`), and public
+  registration can only ever create a `viewer` — the field is not in the schema,
+  so there is no escalation path.
+- **Tokens are narrow.** JWTs are signed with a symmetric-algorithm allowlist
+  (`alg: none` and key-confusion attacks rejected), bound to an issuer and
+  audience, carry a `typ` marker and a unique `jti`, and are verified against a
+  required-claim set.
+- **Rate limiting cannot be forged around.** `X-Forwarded-For` is honoured only
+  when `JMI_TRUSTED_PROXY_HOPS` says a proxy actually rewrote it, and is read
+  from the trusted hop. Credential endpoints get their own much tighter budget,
+  and the client table is LRU-bounded so the limiter cannot itself be a DoS.
+- **Login leaks nothing.** Uniform error text plus a real bcrypt decoy hash keeps
+  "no such user" indistinguishable from "wrong password", in message and timing.
+- **Untrusted data is escaped on the way out.** CSV and Excel exports neutralise
+  spreadsheet formula injection; the dashboard escapes output and runs under a
+  nonce-based CSP with no `unsafe-inline`, alongside HSTS in production and the
+  usual frame/sniffing/referrer headers.
+- **Injection safety**: all DB access goes through SQLAlchemy expressions, with
+  `LIKE` metacharacters escaped; all input validated by Pydantic.
+- **Scraping ethics**: robots.txt is honoured, requests are delayed and identify
+  the bot, responses are size-capped, and failures fail closed.
+
+Every control has a regression test in
+[`tests/test_security_hardening.py`](tests/test_security_hardening.py), written
+as an attack that must fail. CI runs `pip-audit`, Bandit, CodeQL, Gitleaks over
+full history, and Trivy against the container image.
+
+Full threat model, disclosure policy and production checklist:
+**[SECURITY.md](SECURITY.md)**.
 
 ---
 
 ## Testing & quality
 
 ```bash
-ruff check src tests        # lint
-ruff format --check src tests
-mypy                        # static types
-pytest --cov=jmi            # tests + coverage
+make lint      # ruff check + format check
+make type      # mypy
+make test      # pytest
+make audit     # bandit + pip-audit
+make check     # all of the above, as CI runs them
 ```
 
 The suite runs against an in-memory SQLite database and mocked HTTP transports —
-no network, no external services. Current status: **98 tests, 88% coverage**,
-`ruff` clean, `mypy` clean, `bandit` clean, `pip-audit` clean — all enforced in CI.
+no network, no external services, and no `.env` required. Current status:
+**TESTCOUNT_PLACEHOLDER tests, COVERAGE_PLACEHOLDER coverage**, `ruff` clean,
+`mypy` clean, `bandit` clean, `pip-audit` clean — all enforced in CI.
+
+A large slice of the suite is adversarial: `tests/test_security_hardening.py`
+asserts that specific attacks fail — forged proxy headers, `alg: none` tokens,
+cross-audience replay, formula-injected exports, brute-forced logins.
+
+Hooks that run the same checks before each commit:
+
+```bash
+make hooks
+```
 
 ---
 
@@ -226,7 +271,10 @@ no network, no external services. Current status: **98 tests, 88% coverage**,
 - [Deployment guide](docs/deployment.md) — Docker, Postgres, Alembic, workers
 - [Developer guide](docs/developer-guide.md) — adding sources, extending the taxonomy
 - [API reference](docs/api.md) — endpoints, auth, examples
+- [Security policy](SECURITY.md) — threat model, controls, deployment checklist
+- [Contributing](CONTRIBUTING.md) — setup, standards, common tasks
+- [Changelog](CHANGELOG.md) — release history
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).

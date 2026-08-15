@@ -8,12 +8,38 @@ Copy `.env.example` to `.env` and set at minimum:
 JMI_ENV=production
 JMI_DEBUG=false
 JMI_SECRET_KEY=<output of: python -m jmi secret-key>
+JMI_ADMIN_PASSWORD=<a strong, unique password>
 JMI_DATABASE_URL=postgresql+psycopg://jmi:PASSWORD@db:5432/jmi
 JMI_CORS_ORIGINS=https://your-frontend.example.com
+JMI_TRUSTED_PROXY_HOPS=1
 ```
 
-> The application **refuses to start in production** if `JMI_SECRET_KEY` is unset
-> or left at the placeholder value.
+> The application **refuses to start in production** when any of these is unsafe:
+> a `JMI_SECRET_KEY` that is unset, still the placeholder, or shorter than 32
+> characters; a `JMI_ADMIN_PASSWORD` left at its default; or `JMI_CORS_ORIGINS=*`
+> while `JMI_CORS_ALLOW_CREDENTIALS` is true. Failing at boot is deliberate —
+> each of these is invisible once the service is running.
+
+### Proxy hops
+
+`JMI_TRUSTED_PROXY_HOPS` must equal the **exact** number of reverse proxies in
+front of the app — `1` behind a single load balancer or ingress, `0` when the
+app is directly exposed.
+
+The rate limiter reads the client address that far in from the right of
+`X-Forwarded-For`. Setting it to `0` makes the header be ignored entirely.
+Setting it *higher* than the real proxy count is the dangerous direction: the
+limiter then reads an entry the client supplied, and any caller can forge a
+fresh request budget on every request.
+
+### API documentation
+
+`/docs`, `/redoc` and `/openapi.json` are **disabled in production** by default,
+since they enumerate every endpoint and payload shape. Set `JMI_DOCS_ENABLED=true`
+only if a public API reference is intended.
+
+Before going live, work through the checklist in
+[SECURITY.md](../SECURITY.md#deployment-checklist).
 
 ## 2. Docker Compose (recommended)
 

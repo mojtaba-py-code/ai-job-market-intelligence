@@ -100,11 +100,27 @@ extractor = SkillExtractor(load_taxonomy("my_taxonomy.json"))
 
 When touching auth, crawling or I/O, verify:
 
-- [ ] No secret has a production-usable default; new secrets read from settings.
+- [ ] New secrets are typed `SecretStr` on `Settings`, never plain `str` — a
+      plain string leaks through `repr()`, tracebacks and `model_dump()`.
+- [ ] No secret has a production-usable default; unsafe production values are
+      rejected in `Settings._enforce_production_hardening`.
 - [ ] New endpoints declare the right `require_role(...)` guard.
 - [ ] User input is a Pydantic schema (validated, length-bounded).
-- [ ] DB access goes through the ORM/repository (no string-built SQL).
-- [ ] Outbound scraping uses `self.http` (robots + rate limit + retry).
+- [ ] DB access goes through the ORM/repository (no string-built SQL), and any
+      new `LIKE` pattern escapes user input with `_escape_like`.
+- [ ] Outbound scraping uses `self.http` (robots + rate limit + retry + size cap).
 - [ ] Nothing sensitive is logged (the redaction processor covers common keys —
       extend `_SENSITIVE_KEYS` if you add new ones).
 - [ ] Errors raise a `JMIError` subclass so responses stay consistent and safe.
+- [ ] Anything identifying a caller comes from `client_ip(...)`, never straight
+      from a request header.
+- [ ] Untrusted text reaching a new export format is escaped like
+      `escape_formula` does for CSV/Excel.
+- [ ] New dashboard markup uses no inline `style=""` attributes — a CSP nonce
+      cannot authorise them, so the browser silently drops them. Set dynamic
+      styles through the CSSOM (`el.style.width = ...`).
+- [ ] A regression test lands in `tests/test_security_hardening.py`, phrased as
+      an attack that must fail.
+
+The full threat model, including what is deliberately out of scope, lives in
+[SECURITY.md](../SECURITY.md).
