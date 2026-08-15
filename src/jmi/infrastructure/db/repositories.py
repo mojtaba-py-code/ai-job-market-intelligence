@@ -225,11 +225,46 @@ class JobRepository:
         stmt = select(Job).options(selectinload(Job.skills), selectinload(Job.company))
         return self.session.scalars(stmt).unique().all()
 
+    def get_many(self, job_ids: Sequence[int]) -> Sequence[Job]:
+        """Fetch just the given jobs, eager-loading what the API serialises.
+
+        Search resolves only the handful of rows it is about to return, rather
+        than materialising the corpus to look a few ids up.
+        """
+        if not job_ids:
+            return []
+        stmt = (
+            select(Job)
+            .options(selectinload(Job.company), selectinload(Job.skills))
+            .where(Job.id.in_(job_ids))
+        )
+        return self.session.scalars(stmt).unique().all()
+
+    def corpus_fingerprint(self) -> tuple[int, int]:
+        """A cheap summary of the corpus, used to decide if the index is stale.
+
+        Two aggregates over an indexed primary key, so this stays constant-time
+        as the table grows — unlike loading every row to compare.
+        """
+        row = self.session.execute(
+            select(func.count(Job.id), func.coalesce(func.max(Job.id), 0))
+        ).one()
+        return int(row[0]), int(row[1])
+
     def count(self) -> int:
         return int(self.session.scalar(select(func.count()).select_from(Job)) or 0)
 
 
 class ResumeRepository:
+    """Persistence for uploaded resumes.
+
+    **Currently unused, and deliberately so.** Resume matching parses the text in
+    memory and returns only derived output; nothing stores it. Wiring this up
+    would put some of the most sensitive data the platform handles into a plain
+    text column, so it needs encryption at rest, a retention period and a
+    deletion path decided first. See the personal-data section of SECURITY.md.
+    """
+
     def __init__(self, session: Session) -> None:
         self.session = session
 

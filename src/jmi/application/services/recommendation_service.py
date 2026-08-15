@@ -19,8 +19,6 @@ from statistics import median
 from sqlalchemy.orm import Session
 
 from ...nlp.resume import parse_resume
-from ...search import SemanticSearchIndex
-from ...search.embeddings import get_embedder
 from .search_service import SearchService
 
 # Blend weights: how much skill overlap vs. semantic similarity contribute.
@@ -71,10 +69,9 @@ class RecommendationResult:
 class RecommendationService:
     def __init__(self, session: Session) -> None:
         self.session = session
-        from ...config import get_settings
-
-        self._embedder = get_embedder(get_settings().embedding_model)
-        self._search = SearchService(session, index=SemanticSearchIndex(self._embedder))
+        # No explicit index: sharing the process-wide cached one keeps a resume
+        # match from rebuilding the corpus embedding on every call.
+        self._search = SearchService(session)
 
     def recommend(self, resume_text: str, *, top_k: int = 10) -> RecommendationResult:
         profile = parse_resume(resume_text)

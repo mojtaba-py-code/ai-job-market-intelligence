@@ -12,6 +12,7 @@ from ...domain.enums import CrawlJobStatus
 from ...infrastructure.db.models import CrawlJob
 from ...infrastructure.db.repositories import CrawlJobRepository, JobRepository
 from ...logging import get_logger
+from ...search import cache as index_cache
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,10 @@ class IngestService:
         else:
             crawl_record.finished_at = datetime.now(UTC)
             self.session.flush()
+            # An upsert can rewrite a posting's title, description or skills
+            # without changing the row count or the highest id, so the search
+            # index's fingerprint cannot detect it. Drop the cache explicitly.
+            index_cache.invalidate()
             logger.info(
                 "ingest_completed",
                 source=source_name,
