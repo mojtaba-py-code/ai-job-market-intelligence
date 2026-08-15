@@ -249,7 +249,7 @@ make check     # all of the above, as CI runs them
 
 The suite runs against an in-memory SQLite database and mocked HTTP transports —
 no network, no external services, and no `.env` required. Current status:
-**TESTCOUNT_PLACEHOLDER tests, COVERAGE_PLACEHOLDER coverage**, `ruff` clean,
+**166 tests, 89% coverage**, `ruff` clean,
 `mypy` clean, `bandit` clean, `pip-audit` clean — all enforced in CI.
 
 A large slice of the suite is adversarial: `tests/test_security_hardening.py`

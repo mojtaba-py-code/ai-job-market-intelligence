@@ -48,10 +48,21 @@ in `tests/test_security_hardening.py`; the threat model is documented in
   `X-Permitted-Cross-Domain-Policies`.
 - **Disabled OpenAPI docs in production by default** (`JMI_DOCS_ENABLED` opts
   back in).
-- **Refused unsafe production boots**: placeholder or short signing keys, and the
-  default admin password, now fail fast instead of running exposed.
+- **Refused unsafe production boots.** Every placeholder credential is now fatal
+  — signing key, bootstrap admin e-mail and password — not just the signing key,
+  because `jmi seed` creates that admin with the `admin` role and its default
+  password is published in this repository. Short signing keys and
+  `JMI_DEBUG=true` are refused too, and all problems are reported together
+  rather than one restart at a time.
 - **Capped crawler response size**, so a hostile or broken source cannot stream
   an unbounded body into memory.
+- **Made text cleaning and e-mail extraction linear**, removing patterns whose
+  backtracking was quadratic on adversarial input (ReDoS).
+- **Stopped publishing PostgreSQL and Redis to the Docker host**, and required a
+  Redis password — an unauthenticated Redis on a public interface is a full host
+  compromise.
+- **Pinned GitHub Actions to commit SHAs** and scoped the workflow token to read.
+- Raised dependency floors off releases with published CVEs.
 - Disabled accounts are no longer disclosed to callers who do not hold the
   password; the active check moved after password verification.
 - Escaped `LIKE` metacharacters in free-text search, keeping user queries literal
@@ -60,15 +71,17 @@ in `tests/test_security_hardening.py`; the threat model is documented in
 
 ### Added
 
-- `SECURITY.md` with a disclosure policy, threat model and deployment checklist.
-- `tests/test_security_hardening.py` — 50+ regression tests written as attacks
+- `SECURITY.md`, now carrying a full threat model — assets, a table mapping each
+  threat to its control and the file enforcing it, what is deliberately not
+  defended against, and a pre-launch checklist.
+- `tests/test_security_hardening.py` — 60+ regression tests written as attacks
   that must fail.
-- Security CI: `pip-audit`, Bandit, CodeQL, Gitleaks (full history) and Trivy
-  container scanning, on every push and weekly.
-- Dependabot for pip, GitHub Actions and Docker.
+- Security CI: Bandit and `pip-audit` on every push, plus a weekly workflow
+  adding CodeQL, Gitleaks over full history, and Trivy container scanning.
+- Dependabot coverage extended to Docker base images.
 - `.pre-commit-config.yaml` including private-key and secret detection.
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and pull request templates.
-- `make audit` and `make check` targets.
+- `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, issue and pull request templates.
+- `make audit`, `make check` and `make hooks` targets.
 
 ### Changed
 
@@ -81,7 +94,9 @@ in `tests/test_security_hardening.py`; the threat model is documented in
 ### Fixed
 
 - `package-data` referenced a `../../data/taxonomy/*.json` path that does not
-  exist, and omitted the dashboard and demo fixtures actually needed at runtime.
+  exist, and omitted the dashboard and demo fixtures actually needed at runtime,
+  so built wheels shipped without the dashboard and silently served a stub page.
+- Corrected a wrong expectation in the tag-stripping test.
 
 ## [1.0.0] — 2026-07-31
 

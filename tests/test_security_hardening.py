@@ -419,8 +419,10 @@ class TestProductionSurface:
     def _production_app():
         settings = Settings(
             env="production",
+            debug=False,
             secret_key="x" * 64,
-            admin_password="a-real-admin-password",
+            admin_email="ops@example.org",
+            admin_password="a-real-strong-admin-password",
             database_url="sqlite://",
             cors_origins="https://app.example.com",
         )
