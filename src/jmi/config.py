@@ -101,6 +101,20 @@ class Settings(BaseSettings):
     #: a flood of unique source addresses from exhausting memory.
     rate_limit_max_tracked_clients: int = Field(default=50_000, ge=128)
 
+    #: Largest request body accepted, in bytes (default 1 MiB). Pydantic's field
+    #: limits only apply after the whole body is buffered, so this is what stops
+    #: a huge upload from costing memory in the first place.
+    max_request_body_bytes: int = Field(default=1024 * 1024, ge=1024)
+
+    # -- Login lockout ------------------------------------------------------
+    #: Failed logins for a single account before it is temporarily locked. This
+    #: is per-account, unlike the per-address budget above, so an attacker
+    #: spreading guesses across many source addresses still hits a wall.
+    login_max_failures: int = Field(default=10, ge=1)
+    login_failure_window_seconds: int = Field(default=900, ge=1)
+    #: Distinct accounts tracked for lockout, bounding the table's memory.
+    login_max_tracked_accounts: int = Field(default=50_000, ge=128)
+
     # -- Crawler ------------------------------------------------------------
     crawler_user_agent: str = "JMIBot/1.0 (+https://example.com/bot)"
     crawler_respect_robots: bool = True

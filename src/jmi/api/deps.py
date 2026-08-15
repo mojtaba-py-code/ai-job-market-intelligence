@@ -8,7 +8,7 @@ from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from ..config import get_settings
+from ..config import Settings, get_settings
 from ..domain.enums import UserRole
 from ..exceptions import AuthenticationError, AuthorizationError
 from ..infrastructure.db.models import User
@@ -69,6 +69,15 @@ def require_role(*allowed: UserRole) -> Callable[..., User]:
     return _guard
 
 
+def active_settings(request: Request) -> Settings:
+    """The settings the running app was built with.
+
+    ``create_app`` publishes them on ``app.state``; falling back to the cached
+    global keeps this usable outside a request-bound app.
+    """
+    return getattr(request.app.state, "settings", None) or get_settings()
+
+
 def client_identifier(request: Request) -> str:
     """Client id for per-caller accounting.
 
@@ -76,4 +85,4 @@ def client_identifier(request: Request) -> str:
     ``X-Forwarded-For`` unless the operator has declared how many trusted
     proxies sit in front of the app.
     """
-    return client_ip(request, trusted_proxy_hops=get_settings().trusted_proxy_hops)
+    return client_ip(request, trusted_proxy_hops=active_settings(request).trusted_proxy_hops)

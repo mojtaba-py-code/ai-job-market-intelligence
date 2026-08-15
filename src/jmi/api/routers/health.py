@@ -7,17 +7,26 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ... import __version__
+from ...config import Settings
 from ...crawler.registry import registry
-from ..deps import get_db
+from ..deps import active_settings, get_db
 from ..schemas import SourceOut
 
 router = APIRouter(tags=["system"])
 
 
 @router.get("/health")
-def health() -> dict:
-    """Liveness probe."""
-    return {"status": "ok", "version": __version__}
+def health(settings: Settings = Depends(active_settings)) -> dict:
+    """Liveness probe.
+
+    The version is withheld in production. An unauthenticated endpoint that
+    reports the exact build lets anyone match this deployment against published
+    advisories for that version; the platform's own probe only needs the status.
+    """
+    payload = {"status": "ok"}
+    if not settings.is_production:
+        payload["version"] = __version__
+    return payload
 
 
 @router.get("/api/v1/ready")

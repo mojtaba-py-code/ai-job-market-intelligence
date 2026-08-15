@@ -15,7 +15,11 @@ from ..crawler import sources  # noqa: F401  register bundled sources
 from ..infrastructure.db.session import create_all
 from ..logging import configure_logging, get_logger
 from .errors import register_exception_handlers
-from .middleware import RateLimitMiddleware, SecurityHeadersMiddleware
+from .middleware import (
+    BodySizeLimitMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from .routers import analytics, auth, crawler, health, jobs, recommendations, search
 
 logger = get_logger(__name__)
@@ -63,6 +67,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- Middleware (order matters: outermost first) ------------------------
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.is_production)
     app.add_middleware(RateLimitMiddleware, settings=settings)
+    # Innermost of the three, but still ahead of routing and validation: an
+    # oversized body is refused before anything buffers it.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_body_bytes)
     # `cors_allow_credentials` is validated against a wildcard origin in
     # Settings: the two together would let any site read authenticated responses.
     app.add_middleware(
@@ -73,6 +80,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
         max_age=600,
     )
+
+    # Routes must read the settings this app was built with, not the cached
+    # process-wide ones: create_app(settings) would otherwise be silently
+    # ignored downstream, and a route deciding what to disclose based on the
+    # environment would read the wrong environment.
+    app.state.settings = settings
 
     register_exception_handlers(app)
 

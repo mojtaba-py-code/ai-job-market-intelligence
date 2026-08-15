@@ -71,6 +71,10 @@ _DOCS_CSP = (
 
 _DOCS_PATHS = frozenset({"/docs", "/redoc", "/docs/oauth2-redirect"})
 
+#: API responses can carry job data, analytics and exports tied to the caller's
+#: token. Shared caches and browser back/forward stores must not retain them.
+_NO_STORE = "no-store, no-cache, must-revalidate, private"
+
 #: Endpoints that accept credentials and therefore get the tighter budget.
 _AUTH_PATHS = frozenset(
     {
@@ -138,6 +142,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         for header, value in _SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)
 
+        # The server banner names the software and version running here, which
+        # is free reconnaissance for matching a public CVE to this host.
+        response.headers["Server"] = "jmi"
+
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault("Cache-Control", _NO_STORE)
+            response.headers.setdefault("Pragma", "no-cache")
+
         if request.url.path in _DOCS_PATHS:
             response.headers.setdefault("Content-Security-Policy", _DOCS_CSP)
         else:
@@ -150,6 +162,66 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
             )
         return response
+
+
+class BodySizeLimitMiddleware:
+    """Reject request bodies larger than *max_bytes*.
+
+    Pydantic caps individual fields, but that check runs only *after* the whole
+    body has been received and buffered — so a 2 GB POST to a field capped at
+    50 KB is still 2 GB of memory spent before anything rejects it.
+
+    Implemented as raw ASGI rather than ``BaseHTTPMiddleware`` so it can wrap the
+    receive channel and count bytes as they arrive. A declared ``Content-Length``
+    is rejected up front; a chunked body with no declared length is cut off the
+    moment the running total crosses the limit, instead of being trusted.
+    """
+
+    def __init__(self, app, *, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    @staticmethod
+    async def _reject(scope, receive, send) -> None:
+        response = JSONResponse(
+            status_code=413,
+            content={"error": "payload_too_large", "detail": "Request body is too large."},
+        )
+        await response(scope, receive, send)
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        declared = headers.get("content-length")
+        if declared is not None:
+            try:
+                if int(declared) > self.max_bytes:
+                    await self._reject(scope, receive, send)
+                    return
+            except ValueError:
+                # A malformed Content-Length is not something to guess about.
+                await self._reject(scope, receive, send)
+                return
+
+        received = 0
+        too_large = False
+
+        async def counting_receive():
+            nonlocal received, too_large
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    too_large = True
+                    # Stop the stream so the app sees a truncated body and
+                    # returns rather than waiting for a sender that will not stop.
+                    return {"type": "http.disconnect"}
+            return message
+
+        await self.app(scope, counting_receive, send)
 
 
 class _SlidingWindow:
