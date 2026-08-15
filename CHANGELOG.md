@@ -77,7 +77,9 @@ in `tests/test_security_hardening.py`; the threat model is documented in
 - `tests/test_security_hardening.py` — 60+ regression tests written as attacks
   that must fail.
 - Security CI: Bandit and `pip-audit` on every push, plus a weekly workflow
-  adding CodeQL, Gitleaks over full history, and Trivy container scanning.
+  adding Gitleaks over full history and Trivy container scanning. CodeQL is left
+  to GitHub's default code scanning setup, which cannot coexist with an advanced
+  workflow configuration.
 - Dependabot coverage extended to Docker base images.
 - `.pre-commit-config.yaml` including private-key and secret detection.
 - `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, issue and pull request templates.

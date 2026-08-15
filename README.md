@@ -58,7 +58,7 @@ login. The free instance sleeps when idle, so the first request may take ~30s.
 | **API** | FastAPI with auth, RBAC, pagination, filtering, sorting, versioning (`/api/v1`), OpenAPI docs, export (CSV/JSON/Excel) |
 | **Dashboard** | Self-contained, theme-aware analytics dashboard served at `/` |
 | **Security** | JWT with issuer/audience binding, bcrypt, RBAC, proxy-aware rate limiting with a separate brute-force budget, nonce-based CSP, formula-injection-safe exports, fail-fast production config |
-| **Ops** | Docker + Compose, GitHub Actions CI and security scanning (pip-audit, Bandit, CodeQL, Gitleaks, Trivy), APScheduler (and optional Celery/Redis) scheduling, structured logging with secret redaction |
+| **Ops** | Docker + Compose, GitHub Actions CI and security scanning (pip-audit, Bandit, Gitleaks, Trivy, CodeQL), APScheduler (and optional Celery/Redis) scheduling, structured logging with secret redaction |
 
 ## Design philosophy: graceful degradation
 
@@ -229,8 +229,9 @@ export, and no request-supplied value is trusted for identity or authorisation.
 
 Every control has a regression test in
 [`tests/test_security_hardening.py`](tests/test_security_hardening.py), written
-as an attack that must fail. CI runs `pip-audit`, Bandit, CodeQL, Gitleaks over
-full history, and Trivy against the container image.
+as an attack that must fail. CI runs `pip-audit` and Bandit on every push, plus
+a weekly sweep with Gitleaks over full history and Trivy against the container
+image. CodeQL runs through GitHub's default code scanning setup.
 
 Full threat model, disclosure policy and production checklist:
 **[SECURITY.md](SECURITY.md)**.
