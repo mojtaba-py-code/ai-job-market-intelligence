@@ -28,7 +28,7 @@ def seed(*, with_demo_data: bool = True) -> None:
         if auth.users.get_by_email(settings.admin_email) is None:
             auth.register(
                 email=settings.admin_email,
-                password=settings.admin_password,
+                password=settings.admin_password.get_secret_value(),
                 role=UserRole.admin,
             )
             logger.info("admin_created", email=settings.admin_email)

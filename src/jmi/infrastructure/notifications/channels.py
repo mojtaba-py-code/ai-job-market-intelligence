@@ -51,9 +51,14 @@ class EmailChannel(NotificationChannel):
         message.set_content(notification.body)
         try:
             with smtplib.SMTP(self.settings.smtp_host, self.settings.smtp_port, timeout=15) as smtp:
+                # Refuse to authenticate over a plaintext link: without this the
+                # credentials would go out in the clear if STARTTLS is missing.
                 smtp.starttls()
                 if self.settings.smtp_username:
-                    smtp.login(self.settings.smtp_username, self.settings.smtp_password)
+                    smtp.login(
+                        self.settings.smtp_username,
+                        self.settings.smtp_password.get_secret_value(),
+                    )
                 smtp.send_message(message)
         except (smtplib.SMTPException, OSError) as exc:
             logger.warning("email_send_failed", error=str(exc))
@@ -68,12 +73,17 @@ class TelegramChannel(NotificationChannel):
         self.settings = settings or get_settings()
 
     def is_configured(self) -> bool:
-        return bool(self.settings.telegram_bot_token and self.settings.telegram_chat_id)
+        return bool(
+            self.settings.telegram_bot_token.get_secret_value() and self.settings.telegram_chat_id
+        )
 
     def send(self, notification: Notification) -> bool:
         if not self.is_configured():
             return False
-        url = f"https://api.telegram.org/bot{self.settings.telegram_bot_token}/sendMessage"
+        # The bot token sits in the path, so this URL is itself a credential —
+        # it is built at the call site and never logged.
+        token = self.settings.telegram_bot_token.get_secret_value()
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": self.settings.telegram_chat_id,
             "text": f"*{notification.subject}*\n{notification.body}",

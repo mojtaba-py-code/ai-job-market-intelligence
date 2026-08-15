@@ -9,6 +9,8 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-jmi}
+      # Required rather than defaulted: a database that comes up with a
+      # guessable password is a real exposure, not a convenience.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-jmi}
     volumes:
@@ -54,6 +56,10 @@ services:
       # whose password is in this repository.
       JMI_ADMIN_EMAIL: ${JMI_ADMIN_EMAIL:?set the bootstrap admin email in your .env}
       JMI_ADMIN_PASSWORD: ${JMI_ADMIN_PASSWORD:?set a strong bootstrap admin password in your .env}
+      # The api container is reached directly on the published port, so there is
+      # no proxy to have rewritten X-Forwarded-For. Raise this to match if you
+      # put an ingress in front.
+      JMI_TRUSTED_PROXY_HOPS: "0"
     ports:
       # The API is the only service meant to be reachable from outside.
       - "8000:8000"

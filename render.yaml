@@ -27,8 +27,22 @@ services:
         generateValue: true
       - key: JMI_DATABASE_URL
         value: sqlite:///./data/runtime/jmi.sqlite3
+      # The demo's read-only endpoints are open to any origin, which is only
+      # safe because credentialed cross-origin requests are switched off. With
+      # credentials enabled, `*` would let any website read authenticated
+      # responses on a visitor's behalf — Settings rejects that combination.
       - key: JMI_CORS_ORIGINS
         value: "*"
+      - key: JMI_CORS_ALLOW_CREDENTIALS
+        value: "false"
+      # Render terminates TLS on one proxy in front of the service, so the
+      # rate limiter can trust exactly one X-Forwarded-For hop.
+      - key: JMI_TRUSTED_PROXY_HOPS
+        value: "1"
+      # Swagger UI is normally off in production; the demo re-enables it because
+      # letting people explore the API is the entire point of the deployment.
+      - key: JMI_DOCS_ENABLED
+        value: "true"
       - key: JMI_ADMIN_EMAIL
         value: admin@example.com
       - key: JMI_ADMIN_PASSWORD
