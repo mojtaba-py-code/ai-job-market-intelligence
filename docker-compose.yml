@@ -17,13 +17,21 @@ services:
       - pgdata:/var/lib/postgresql/data
     expose:
       - "5432"
-    # Drop every Linux capability and forbid regaining privilege via setuid
-    # binaries: a process that breaks out of Postgres should find nothing left
-    # to escalate with.
     security_opt:
       - no-new-privileges:true
+    # The official images start as root to prepare the data directory and then
+    # drop to their own service account, which needs these four capabilities.
+    # Dropping ALL without adding them back makes the entrypoint fail to switch
+    # user and the container exit before it ever serves — the CI compose run
+    # exists to catch exactly that.
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jmi} -d ${POSTGRES_DB:-jmi}"]
       interval: 5s
@@ -39,8 +47,19 @@ services:
       - "6379"
     security_opt:
       - no-new-privileges:true
+    # The official images start as root to prepare the data directory and then
+    # drop to their own service account, which needs these four capabilities.
+    # Dropping ALL without adding them back makes the entrypoint fail to switch
+    # user and the container exit before it ever serves — the CI compose run
+    # exists to catch exactly that.
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
@@ -76,6 +95,8 @@ services:
       - "8000:8000"
     security_opt:
       - no-new-privileges:true
+    # This image already declares USER appuser, so nothing switches user at
+    # runtime and no capability is required at all.
     cap_drop:
       - ALL
     # An immutable filesystem means a foothold cannot drop a payload anywhere
