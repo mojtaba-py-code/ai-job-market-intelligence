@@ -5,6 +5,61 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-08-15
+
+A second hardening pass, focused on what a request can *cost* and what it can
+*reveal* — the areas the first pass did not cover.
+
+### Security
+
+- **Fixed an unauthenticated CPU amplification in semantic search.** Every call
+  to the public `/api/v1/search/semantic` rebuilt the index from scratch: it
+  fitted the embedder over the whole corpus, embedded every document, and loaded
+  all jobs from the database *twice*. One small HTTP request therefore cost
+  O(corpus) CPU and allocations, so the endpoint got more expensive as the
+  platform got more useful, and the rate limit was no defence. The index is now
+  built once per corpus state and shared process-wide, invalidated by a cheap
+  fingerprint and explicitly after ingestion. Measured at 1,200 postings: **199 ms
+  → 25 ms per request**, with the gap widening linearly as the corpus grows.
+- **Capped request body size** (`JMI_MAX_REQUEST_BODY_BYTES`, 1 MiB default).
+  Pydantic's field limits only apply once the whole body is buffered, so a
+  multi-gigabyte POST to a 50 KB field was still multi-gigabytes of memory spent
+  before anything rejected it. Enforced as raw ASGI so a chunked body with no
+  declared `Content-Length` is cut off as it arrives rather than trusted.
+- **Added a per-account login lockout.** The existing limiter meters by client
+  address, which a distributed attempt sidesteps entirely — guesses spread over
+  many addresses each stay under budget while the account absorbs thousands. It
+  keys on the submitted identifier, so unknown accounts throttle identically and
+  the lockout does not become an existence oracle. A correct password clears the
+  counter, so nobody can hold a real user out by failing logins on their behalf.
+- **Stopped disclosing the build.** `/health` withheld nothing, so an
+  unauthenticated caller could read the exact version and match it against
+  published advisories. It now reports only status in production, and the
+  `Server` banner no longer names the underlying software.
+- **Added `Cache-Control: no-store, private`** to every `/api/` response, so job
+  data and exports do not linger in shared caches or browser history.
+- **Hardened the containers**: read-only root filesystem with writable paths on
+  tmpfs, every Linux capability dropped, and `no-new-privileges` on all three
+  services. CI now starts the stack and serves requests through it, because this
+  is exactly the kind of change that passes review and fails at runtime.
+
+### Fixed
+
+- `create_app(settings)` was silently ignored downstream: routes read the cached
+  process-wide settings instead, so a route deciding what to disclose based on
+  the environment read the wrong environment. Settings are now published on
+  `app.state` and resolved through a dependency.
+- The body-limit middleware built its rejection response with a `None` ASGI
+  scope, which raised instead of returning 413. Caught by its own test.
+
+### Added
+
+- `tests/test_security_resources.py` — 20 tests covering the above.
+- `.well-known/security.txt` (RFC 9116) for machine-readable disclosure contact.
+- A personal-data section in `SECURITY.md`, recording that resume text is never
+  persisted or logged, and that the unused `resumes` table must not be wired up
+  without encryption at rest, a retention period and a deletion path.
+
 ## [1.1.0] — 2026-08-15
 
 A security-hardening release. Every change below has a matching regression test
@@ -124,5 +179,6 @@ Initial release.
   PostgreSQL with Alembic migrations via the `postgres` extra.
 - Docker, Docker Compose and GitHub Actions CI.
 
+[1.2.0]: https://github.com/mojtaba-py-code/ai-job-market-intelligence/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mojtaba-py-code/ai-job-market-intelligence/releases/tag/v1.1.0
 [1.0.0]: https://github.com/mojtaba-py-code/ai-job-market-intelligence/releases/tag/v1.0.0

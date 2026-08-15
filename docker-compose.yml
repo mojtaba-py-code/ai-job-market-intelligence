@@ -17,6 +17,13 @@ services:
       - pgdata:/var/lib/postgresql/data
     expose:
       - "5432"
+    # Drop every Linux capability and forbid regaining privilege via setuid
+    # binaries: a process that breaks out of Postgres should find nothing left
+    # to escalate with.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jmi} -d ${POSTGRES_DB:-jmi}"]
       interval: 5s
@@ -30,6 +37,10 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
     expose:
       - "6379"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
@@ -63,6 +74,17 @@ services:
     ports:
       # The API is the only service meant to be reachable from outside.
       - "8000:8000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # An immutable filesystem means a foothold cannot drop a payload anywhere
+    # that survives. The two paths the app genuinely writes to are mounted as
+    # tmpfs, so they exist, stay writable, and vanish with the container.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/data/runtime:size=64m,uid=10001,gid=10001
     # Create schema + admin + demo data, then serve.
     command: >
       sh -c "python -m jmi seed &&

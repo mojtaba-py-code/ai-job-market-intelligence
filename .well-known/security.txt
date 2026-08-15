@@ -1,0 +1,12 @@
+# Machine-readable security contact (RFC 9116).
+#
+# Serve this at https://<host>/.well-known/security.txt from your reverse proxy
+# or CDN, and refresh Expires before it lapses — a stale file reads as an
+# abandoned contact and researchers will stop bothering.
+
+Contact: https://github.com/mojtaba-py-code/ai-job-market-intelligence/security/advisories/new
+Contact: mailto:mojtaba.python@gmail.com
+Expires: 2027-08-15T00:00:00.000Z
+Preferred-Languages: en, fa
+Canonical: https://github.com/mojtaba-py-code/ai-job-market-intelligence/blob/main/.well-known/security.txt
+Policy: https://github.com/mojtaba-py-code/ai-job-market-intelligence/blob/main/SECURITY.md

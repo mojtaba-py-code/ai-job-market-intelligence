@@ -59,13 +59,40 @@ jobs:
           path: coverage.xml
 
   docker:
-    name: Build Docker image
+    name: Build image & run the hardened stack
     runs-on: ubuntu-latest
     needs: quality
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Build image
         run: docker build -t jmi-platform:ci .
+
+      # The compose stack runs the API read-only, with every capability dropped
+      # and its writable paths on tmpfs. That is exactly the kind of hardening
+      # that looks fine in review and fails at runtime, so the stack is actually
+      # started and served a request rather than merely built.
+      - name: Start the stack
+        env:
+          JMI_SECRET_KEY: ci-only-secret-key-long-enough-to-pass-validation
+          JMI_ADMIN_EMAIL: ci@example.org
+          JMI_ADMIN_PASSWORD: ci-only-admin-password
+          POSTGRES_PASSWORD: ci-only-postgres-password
+          REDIS_PASSWORD: ci-only-redis-password
+        run: docker compose up --build --detach --wait --wait-timeout 180
+
+      - name: The API answers on a read-only filesystem
+        run: |
+          curl --fail --silent --show-error http://localhost:8000/health
+          curl --fail --silent --show-error "http://localhost:8000/api/v1/jobs?limit=1" > /dev/null
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down --volumes
 
   security:
     name: Security scan

@@ -216,8 +216,16 @@ export, and no request-supplied value is trusted for identity or authorisation.
   when `JMI_TRUSTED_PROXY_HOPS` says a proxy actually rewrote it, and is read
   from the trusted hop. Credential endpoints get their own much tighter budget,
   and the client table is LRU-bounded so the limiter cannot itself be a DoS.
-- **Login leaks nothing.** Uniform error text plus a real bcrypt decoy hash keeps
-  "no such user" indistinguishable from "wrong password", in message and timing.
+- **Login leaks nothing, and does not yield to patience.** Uniform error text
+  plus a real bcrypt decoy hash keeps "no such user" indistinguishable from
+  "wrong password", in message and timing. A per-account lockout catches guesses
+  spread across many source addresses, which a per-address limiter cannot see.
+- **A request cannot cost more than it should.** Bodies are capped while being
+  read, before anything buffers them, and the search corpus is embedded once and
+  shared rather than rebuilt on every anonymous query.
+- **The deployment says as little as possible.** No version on `/health` in
+  production, a generic server banner, `no-store` on every API response, and a
+  container that runs read-only, non-root, with all capabilities dropped.
 - **Untrusted data is escaped on the way out.** CSV and Excel exports neutralise
   spreadsheet formula injection; the dashboard escapes output and runs under a
   nonce-based CSP with no `unsafe-inline`, alongside HSTS in production and the

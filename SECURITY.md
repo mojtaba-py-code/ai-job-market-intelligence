@@ -68,6 +68,12 @@ request-supplied value is trusted for identity or authorisation.
 | Threat | Control | Enforced in |
 | --- | --- | --- |
 | Credential stuffing / brute force | Dedicated auth rate-limit budget, far tighter than the global one | [`api/middleware.py`](src/jmi/api/middleware.py) |
+| **Distributed** brute force across many source addresses | Per-account failure lockout, which the per-address limiter cannot see | [`services/login_throttle.py`](src/jmi/application/services/login_throttle.py) |
+| Unauthenticated CPU amplification via search | The corpus is embedded once per corpus state and shared, not rebuilt per request | [`search/cache.py`](src/jmi/search/cache.py), [`services/search_service.py`](src/jmi/application/services/search_service.py) |
+| Memory exhaustion via a huge request body | Body size cap enforced while reading, ahead of buffering and validation | [`api/middleware.py`](src/jmi/api/middleware.py) |
+| Build/version fingerprinting | `/health` withholds the version in production; the server banner is generic | [`api/routers/health.py`](src/jmi/api/routers/health.py), [`api/middleware.py`](src/jmi/api/middleware.py) |
+| Sensitive responses retained by caches | `Cache-Control: no-store, private` on every `/api/` response | [`api/middleware.py`](src/jmi/api/middleware.py) |
+| Container breakout / persistence | Read-only root filesystem, all capabilities dropped, `no-new-privileges`, writable paths on tmpfs, non-root user | [`docker-compose.yml`](docker-compose.yml), [`Dockerfile`](Dockerfile) |
 | Rate-limit evasion via forged `X-Forwarded-For` | Header honoured only when `JMI_TRUSTED_PROXY_HOPS > 0`, and read from the trusted hop | [`api/middleware.py`](src/jmi/api/middleware.py) |
 | Limiter memory exhaustion | LRU-bounded client table | [`api/middleware.py`](src/jmi/api/middleware.py) |
 | User enumeration | Uniform error text; a real bcrypt decoy hash equalises timing for unknown accounts | [`services/auth_service.py`](src/jmi/application/services/auth_service.py) |
@@ -89,11 +95,31 @@ Each control has a matching regression test in
 [`tests/test_security_hardening.py`](tests/test_security_hardening.py), written
 as "an attacker does X, and X fails".
 
+### Handling of personal data
+
+Resume text submitted to `POST /api/v1/recommendations/match` is parsed in
+memory and **never persisted or logged** — only derived, non-identifying output
+(skill names, a years-of-experience estimate, match scores) is returned. The
+parser does extract a contact e-mail, which stays inside the in-memory profile
+and is not part of any response.
+
+The schema still carries a `resumes` table and a `ResumeRepository` for storing
+submissions, neither of which is wired to any endpoint. **Do not connect them
+without first deciding on encryption at rest, a retention period, and a deletion
+path** — the column is plain text, and resumes are among the most sensitive data
+this platform can touch.
+
 ### Not defended against
 
-- **Multi-instance rate limiting.** The limiter is in-process; each instance
-  keeps its own counters. Put a shared limiter (Redis, or the ingress) in front
-  of a horizontally scaled deployment.
+- **Multi-instance rate limiting and lockout.** Both the request limiter and the
+  login throttle are in-process; each instance keeps its own counters, so an
+  attacker spread across N instances gets N times the budget. Put a shared store
+  (Redis) or the ingress in front of a horizontally scaled deployment.
+- **A determined account-lockout nuisance.** Per-account throttling means someone
+  can deliberately fail logins to lock a specific user out for the window. The
+  defaults keep that to a self-expiring 15 minutes, and a correct password clears
+  the counter immediately; sites needing a stronger guarantee should add a second
+  factor rather than lengthen the lockout.
 - **Token revocation.** Access tokens are stateless and valid until they expire;
   keep `JMI_ACCESS_TOKEN_TTL_MINUTES` short. The `jti` claim is emitted so a
   denylist can be added without changing the token format.

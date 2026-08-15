@@ -6,5 +6,5 @@ technologies with an NLP pipeline, powers semantic search and resume matching,
 and exposes everything through a secured FastAPI backend.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __all__ = ["__version__"]
