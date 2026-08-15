@@ -104,6 +104,19 @@ class HttpClient:
         self._ua_index += 1
         return ua
 
+    def _check_response_size(self, url: str, response: httpx.Response) -> None:
+        """Reject responses larger than the configured cap.
+
+        A crawler pulls bytes from hosts it does not control, so an oversized or
+        endlessly-generated body would otherwise be read straight into memory.
+        """
+        limit = self.settings.crawler_max_response_bytes
+        if len(response.content) > limit:
+            raise CrawlerError(
+                f"Response from {url} exceeds the {limit} byte limit "
+                f"({len(response.content)} bytes)."
+            )
+
     def get(self, url: str, *, headers: dict[str, str] | None = None, **kwargs) -> httpx.Response:
         """Fetch *url* with robots check, rate limiting and retry/backoff."""
         if not self.robots.is_allowed(url):
@@ -129,6 +142,7 @@ class HttpClient:
                     )
                 else:
                     response.raise_for_status()
+                    self._check_response_size(url, response)
                     return response
 
             if attempt < self.settings.crawler_max_retries:

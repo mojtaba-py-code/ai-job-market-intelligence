@@ -17,6 +17,23 @@ from ...domain.entities import JobPosting
 from ...domain.enums import SkillKind, UserRole
 from .models import Company, CrawlJob, Job, Resume, Skill, User
 
+_LIKE_ESCAPE = "\\"
+
+
+def _escape_like(term: str) -> str:
+    """Escape LIKE metacharacters in a user-supplied search term.
+
+    ``%`` and ``_`` are wildcards inside a LIKE pattern. Leaving them raw is not
+    an injection risk — the term is still a bound parameter — but it does mean a
+    search for ``"c_"`` silently matches ``"c#"``, and a query of ``"%"`` forces
+    a full scan of every description. Escaping keeps the search literal.
+    """
+    return (
+        term.replace(_LIKE_ESCAPE, _LIKE_ESCAPE * 2)
+        .replace("%", f"{_LIKE_ESCAPE}%")
+        .replace("_", f"{_LIKE_ESCAPE}_")
+    )
+
 
 @dataclass(slots=True)
 class JobFilter:
@@ -161,9 +178,10 @@ class JobRepository:
     # -- Queries ------------------------------------------------------------
     def _apply_filter(self, stmt, flt: JobFilter):
         if flt.query:
-            like = f"%{flt.query.lower()}%"
+            like = f"%{_escape_like(flt.query.lower())}%"
             stmt = stmt.where(
-                func.lower(Job.title).like(like) | func.lower(Job.description).like(like)
+                func.lower(Job.title).like(like, escape=_LIKE_ESCAPE)
+                | func.lower(Job.description).like(like, escape=_LIKE_ESCAPE)
             )
         if flt.company:
             stmt = stmt.join(Job.company).where(func.lower(Company.name) == flt.company.lower())
