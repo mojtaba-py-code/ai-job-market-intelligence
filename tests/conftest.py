@@ -25,6 +25,25 @@ from jmi.infrastructure.db import models  # noqa: F401  register mappers
 from jmi.infrastructure.db.base import Base
 
 
+@pytest.fixture(autouse=True)
+def _reset_process_state():
+    """Clear process-wide caches between tests.
+
+    Both the search index and the login throttle are deliberately global — they
+    would count and cache nothing if scoped per request. Each test builds its own
+    in-memory database, so leftovers would mean an index served against a corpus
+    it was never built from, or a lockout inherited from an unrelated test.
+    """
+    from jmi.application.services.login_throttle import reset_login_throttle
+    from jmi.search import cache as index_cache
+
+    index_cache.invalidate()
+    reset_login_throttle()
+    yield
+    index_cache.invalidate()
+    reset_login_throttle()
+
+
 @pytest.fixture()
 def engine():
     """A shared in-memory SQLite engine (StaticPool keeps one connection)."""
