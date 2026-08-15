@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format type test cov run seed ingest report docker-up docker-down clean
+.PHONY: help install dev hooks lint format type test cov audit check run seed ingest report docker-up docker-down clean
 
 PY ?= python
 
@@ -6,11 +6,14 @@ help:
 	@echo "Targets:"
 	@echo "  install   Install the package (runtime deps)"
 	@echo "  dev       Install with dev + optional extras"
+	@echo "  hooks     Install the pre-commit hooks"
 	@echo "  lint      Run ruff"
 	@echo "  format    Auto-format / auto-fix with ruff"
 	@echo "  type      Run mypy"
 	@echo "  test      Run pytest"
 	@echo "  cov       Run pytest with coverage"
+	@echo "  audit     Security scan (bandit + pip-audit)"
+	@echo "  check     lint + type + test + audit (what CI runs)"
 	@echo "  run       Start the API server (reload)"
 	@echo "  seed      Create schema, admin user and demo data"
 	@echo "  report    Print a market analytics report"
@@ -37,6 +40,15 @@ test:
 
 cov:
 	$(PY) -m pytest --cov=jmi --cov-report=term-missing
+
+audit:
+	$(PY) -m bandit -c pyproject.toml -r src -ll
+	$(PY) -m pip_audit --skip-editable --progress-spinner off
+
+check: lint type test audit
+
+hooks:
+	$(PY) -m pre_commit install
 
 run:
 	$(PY) -m jmi serve --reload

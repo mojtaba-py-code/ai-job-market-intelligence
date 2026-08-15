@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmi-platform"
-version = "1.0.0"
+version = "1.1.0"
 description = "AI-Powered Job Market Intelligence Platform — multi-source ingestion, NLP skill extraction, semantic search, analytics and resume matching."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -55,6 +55,9 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.9",
     "types-python-dateutil",
+    "bandit[toml]>=1.7",
+    "pip-audit>=2.7",
+    "pre-commit>=3.7",
 ]
 
 [project.scripts]
@@ -64,7 +67,14 @@ jmi = "jmi.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-jmi = ["py.typed", "../../data/taxonomy/*.json"]
+# The skill taxonomy is defined in code (jmi/nlp/taxonomy.py); only the typing
+# marker and the bundled demo fixtures need shipping as data.
+jmi = [
+    "py.typed",
+    "api/static/*.html",
+    "crawler/sources/*.json",
+    "crawler/sources/*.html",
+]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -92,6 +102,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
+[tool.bandit]
+# Tests deliberately construct weak credentials and forged tokens to assert that
+# they are rejected, so scanning them produces only noise; bare `assert` is
+# flagged there by design too.
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+
 [tool.mypy]
 python_version = "3.12"
 packages = ["jmi"]
@@ -100,7 +116,3 @@ ignore_missing_imports = true
 warn_unused_ignores = true
 disallow_untyped_defs = false
 plugins = []
-
-[tool.bandit]
-# Tests deliberately exercise weak inputs and assert on failure paths.
-exclude_dirs = ["tests"]
