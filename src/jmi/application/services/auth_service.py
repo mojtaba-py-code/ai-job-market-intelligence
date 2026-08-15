@@ -8,7 +8,12 @@ from functools import lru_cache
 from sqlalchemy.orm import Session
 
 from ...domain.enums import UserRole
-from ...exceptions import AuthenticationError, ConflictError, ValidationError
+from ...exceptions import (
+    AuthenticationError,
+    ConflictError,
+    RateLimitedError,
+    ValidationError,
+)
 from ...infrastructure.db.models import User
 from ...infrastructure.db.repositories import UserRepository
 from ...infrastructure.security import (
@@ -16,6 +21,7 @@ from ...infrastructure.security import (
     hash_password,
     verify_password,
 )
+from .login_throttle import get_login_throttle
 
 MIN_PASSWORD_LENGTH = 8
 
@@ -51,17 +57,32 @@ class AuthService:
         return self.users.create(email=email, hashed_password=hash_password(password), role=role)
 
     def authenticate(self, *, email: str, password: str) -> User:
+        # Per-account, so guesses spread across many source addresses — each one
+        # staying under the per-address rate limit — still run out of budget.
+        throttle = get_login_throttle()
+        if throttle.is_locked(email):
+            raise RateLimitedError(
+                "Too many failed sign-in attempts. Try again in "
+                f"{throttle.retry_after(email)} seconds."
+            )
+
         user = self.users.get_by_email(email)
         if user is None:
             # Spend the same work as a real check before failing (see _decoy_hash).
             verify_password(password, _decoy_hash())
+            throttle.record_failure(email)
             raise AuthenticationError("Invalid email or password.")
         if not verify_password(password, user.hashed_password):
+            throttle.record_failure(email)
             raise AuthenticationError("Invalid email or password.")
         if not user.is_active:
             # Checked only after the password is confirmed, so a disabled
             # account is not disclosed to someone who does not hold its password.
             raise AuthenticationError("Account is disabled.")
+
+        # A correct password clears the history, so someone deliberately failing
+        # logins against a victim cannot keep the real owner locked out.
+        throttle.record_success(email)
         return user
 
     def issue_token(self, user: User) -> str:
