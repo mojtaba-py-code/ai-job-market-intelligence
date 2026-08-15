@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
@@ -29,6 +29,7 @@ role-based authorization and rate limiting.
 """
 
 _STATIC_DIR = Path(__file__).with_name("static")
+_NONCE_PLACEHOLDER = "__CSP_NONCE__"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -45,24 +46,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         logger.info("api_shutdown")
 
+    # Interactive docs enumerate every endpoint and payload shape, so they are
+    # off by default in production (JMI_DOCS_ENABLED re-enables them).
+    expose_docs = settings.expose_docs
+
     app = FastAPI(
         title="JMI Platform API",
         description=_DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
     )
 
     # -- Middleware (order matters: outermost first) ------------------------
     app.add_middleware(SecurityHeadersMiddleware, hsts=settings.is_production)
     app.add_middleware(RateLimitMiddleware, settings=settings)
+    # `cors_allow_credentials` is validated against a wildcard origin in
+    # Settings: the two together would let any site read authenticated responses.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        max_age=600,
     )
 
     register_exception_handlers(app)
@@ -78,11 +87,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # -- Dashboard (served as a self-contained static page) -----------------
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def dashboard() -> HTMLResponse:
+    def dashboard(request: Request) -> HTMLResponse:
+        """Serve the dashboard with a per-request CSP nonce stamped in.
+
+        The page's inline ``<style>``/``<script>`` carry a ``__CSP_NONCE__``
+        placeholder; swapping it for the nonce that
+        :class:`SecurityHeadersMiddleware` minted lets the strict
+        ``script-src 'nonce-…'`` policy apply without ever falling back to
+        ``'unsafe-inline'``.
+        """
+        nonce = getattr(request.state, "csp_nonce", "")
         index = _STATIC_DIR / "dashboard.html"
         if index.exists():
-            return HTMLResponse(index.read_text(encoding="utf-8"))
-        return HTMLResponse("<h1>JMI Platform</h1><p>See <a href='/docs'>/docs</a>.</p>")
+            html = index.read_text(encoding="utf-8").replace(_NONCE_PLACEHOLDER, nonce)
+            return HTMLResponse(html)
+        return HTMLResponse("<h1>JMI Platform</h1><p>The API is running.</p>")
 
     return app
 

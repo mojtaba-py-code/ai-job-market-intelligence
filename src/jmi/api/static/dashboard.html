@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>JMI — Job Market Intelligence</title>
-  <style>
+  <!-- __CSP_NONCE__ is replaced per request; see jmi.api.app.dashboard. -->
+  <style nonce="__CSP_NONCE__">
     :root {
       --bg: #0f172a; --panel: #1e293b; --panel-2: #263449;
       --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8; --bar: #38bdf8;
@@ -44,6 +45,9 @@
     .pill { background: var(--panel-2); color: var(--muted); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
     .empty { color: var(--muted); font-size: 13px; }
     footer { padding: 24px 32px; color: var(--muted); font-size: 12px; text-align: center; }
+    /* A CSP nonce authorises <style> blocks but never inline style="" attributes,
+       so every rule lives here and dynamic widths are set through the CSSOM. */
+    .card--recent { margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -67,7 +71,7 @@
       <div class="card"><h2>Top countries</h2><div id="countries"></div></div>
       <div class="card"><h2>Average salary by currency</h2><div id="salary"></div></div>
     </section>
-    <section class="card" style="margin-top:20px">
+    <section class="card card--recent">
       <h2>Recent jobs</h2>
       <div id="recent"><div class="empty">Loading…</div></div>
     </section>
@@ -75,7 +79,7 @@
 
   <footer>JMI Platform · built with FastAPI, SQLAlchemy &amp; a rule-based NLP pipeline</footer>
 
-  <script>
+  <script nonce="__CSP_NONCE__">
     const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -86,9 +90,16 @@
       el.innerHTML = items.map((i) => {
         const pct = max ? Math.round((i.count / max) * 100) : 0;
         return `<div class="bar-row"><span class="name" title="${escapeHtml(i.name)}">${escapeHtml(i.name)}</span>`
-          + `<span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>`
+          + `<span class="bar-track"><span class="bar-fill" data-pct="${pct}"></span></span>`
           + `<span class="count">${i.count}</span></div>`;
       }).join("");
+
+      // Widths are applied through the CSSOM rather than a style="" attribute:
+      // the page's CSP allows styles by nonce, and a nonce cannot authorise an
+      // inline style attribute, so the bars would silently render at zero width.
+      el.querySelectorAll(".bar-fill").forEach((bar) => {
+        bar.style.width = `${bar.dataset.pct}%`;
+      });
     }
 
     function renderSalary(items) {
