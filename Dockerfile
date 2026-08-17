@@ -30,8 +30,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     JMI_ENV=production
 
-# Runtime libs only (no compilers).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime libs only (no compilers). Base-image packages are upgraded first so
+# the shipped image picks up Debian security updates published after the
+# python:3.12-slim tag was built.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         libxml2 libxslt1.1 \
     && rm -rf /var/lib/apt/lists/*
 
