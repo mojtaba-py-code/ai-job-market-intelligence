@@ -96,6 +96,14 @@ Run behind a reverse proxy (nginx / Traefik / a cloud LB) terminating TLS.
 The app already sets security headers and, in production, HSTS. Ensure the proxy
 forwards `X-Forwarded-For` so rate limiting keys on the real client IP.
 
+Forwarding the header is only half of it: the app ignores `X-Forwarded-For`
+entirely until `JMI_TRUSTED_PROXY_HOPS` states how many proxies sit in front of
+it (see [Proxy hops](#proxy-hops)). Leave it at `0` and every request keys on
+the proxy's own address, so the whole deployment shares one rate-limit budget
+and a single caller can exhaust it for everyone. Set it to the **exact** hop
+count — a value higher than reality lets a client forge the header and mint a
+fresh budget per request.
+
 Example (nginx):
 
 ```nginx
