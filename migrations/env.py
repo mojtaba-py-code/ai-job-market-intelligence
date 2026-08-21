@@ -13,8 +13,8 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from jmi.config import get_settings
-from jmi.infrastructure.db.base import Base
 from jmi.infrastructure.db import models  # noqa: F401  register the models
+from jmi.infrastructure.db.base import Base
 
 config = context.config
 if config.config_file_name is not None:
@@ -42,9 +42,7 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata, compare_type=True
-        )
+        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
         with context.begin_transaction():
             context.run_migrations()
 
