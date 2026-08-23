@@ -5,6 +5,37 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Dropped three extras that installed packages the code never imports.**
+  `pip install ".[nlp]"` pulled spaCy, `".[browser]"` pulled Playwright and
+  `".[metrics]"` pulled `prometheus-client`, and not one of those packages was
+  imported anywhere in `src/`, so nothing behaved differently after installing
+  any of them. `faiss-cpu` left the `semantic` extra for the same reason;
+  `sentence-transformers` and `numpy` stay, because `jmi.search.st_backend`
+  imports both.
+- **Corrected three claims about backends that do not exist.**
+  `docs/deployment.md` told the reader to install the `metrics` extra to expose
+  Prometheus metrics — there is no metrics endpoint — and attributed the
+  `semantic` extra to FAISS. `jmi.nlp.taxonomy` described `jmi.nlp.skills` as
+  "the optional spaCy backend", and `jmi.nlp.skills` offered to layer
+  named-entity recognition from the `nlp` extra. Skill extraction is
+  rule-based; there is no statistical backend to install.
+
+### Added
+
+- `tests/test_packaging.py` keeps this from returning. Every package in a
+  user-facing extra must be **imported** — the check parses the AST rather than
+  searching the source text, because a textual search is satisfied by the same
+  docstring prose that made the dead extras look alive. Packages that a library
+  resolves from a URL scheme (`psycopg` via `postgresql+psycopg://`, `redis`
+  via Celery's `redis://` transport) are listed explicitly, and a second test
+  fails if the scheme excusing them disappears from the configuration. A third
+  test fails when any docstring or guide names an extra `pyproject` no longer
+  defines.
+
 ## [1.2.0] — 2026-08-15
 
 A second hardening pass, focused on what a request can *cost* and what it can
