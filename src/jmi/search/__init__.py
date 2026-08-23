@@ -5,7 +5,7 @@ Two backends are supported behind one interface:
 * **TfidfEmbedder** — a dependency-light, deterministic default that works out of
   the box (pure-Python sparse TF-IDF + cosine similarity).
 * **SentenceTransformerEmbedder** — activated automatically when the
-  ``jmi[semantic]`` extra (sentence-transformers + faiss) is installed, giving
+  ``jmi[semantic]`` extra (sentence-transformers) is installed, giving
   true dense-vector semantic search.
 """
 

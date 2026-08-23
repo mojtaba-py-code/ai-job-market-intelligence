@@ -6,8 +6,8 @@ aliases. The default taxonomy below can be extended at runtime via an external
 JSON file (see :func:`load_taxonomy`).
 
 Keeping this rule-based table means extraction is deterministic, explainable and
-runs without downloading multi-gigabyte models — while the optional spaCy backend
-(``jmi.nlp.skills``) can enrich it when installed.
+runs without downloading multi-gigabyte models. :mod:`jmi.nlp.skills` matches it
+against text; there is no statistical backend to install.
 """
 
 from __future__ import annotations

@@ -42,12 +42,10 @@ dependencies = [
 [project.optional-dependencies]
 # Heavy / infrastructure extras. The platform runs without them (graceful
 # fallbacks) and automatically upgrades its behaviour when they are installed.
-semantic = ["sentence-transformers>=2.6", "faiss-cpu>=1.8", "numpy>=1.26"]
-nlp = ["spacy>=3.7"]
+# Every package listed here is imported by the code that the extra enables.
+semantic = ["sentence-transformers>=2.6", "numpy>=1.26"]
 postgres = ["psycopg[binary]>=3.1", "alembic>=1.13"]
 tasks = ["celery>=5.3", "redis>=5.0"]
-browser = ["playwright>=1.43"]
-metrics = ["prometheus-client>=0.20"]
 dev = [
     "pytest>=8.1",
     "pytest-cov>=5.0",

@@ -1,10 +1,9 @@
 """Skill and technology extraction.
 
-The default extractor is rule-based: it matches the curated taxonomy against the
-text using boundary-aware regular expressions. This is fast, deterministic and
-explainable. When the ``jmi[nlp]`` extra (spaCy) is installed, callers may layer
-named-entity recognition on top; the rule-based layer alone already covers the
-technologies the analytics module reports on.
+Extraction is rule-based: it matches the curated taxonomy against the text using
+boundary-aware regular expressions. This is fast, deterministic and explainable,
+and it covers the technologies the analytics module reports on without pulling in
+a statistical NLP stack.
 """
 
 from __future__ import annotations

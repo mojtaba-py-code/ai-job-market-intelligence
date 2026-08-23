@@ -121,7 +121,8 @@ location / {
 - For multi-instance deployments, back the rate limiter with Redis (a drop-in
   replacement for the in-memory limiter) so limits are shared.
 - The semantic index is in-memory per process; for large corpora enable the
-  `semantic` extra (FAISS) and/or externalise the index to a vector store.
+  `semantic` extra (sentence-transformers) and/or externalise the index to a
+  vector store.
 
 ## 7. Observability
 
@@ -129,5 +130,6 @@ location / {
   the DB). The Docker image ships a `HEALTHCHECK`.
 - **Logs**: structured JSON in production (`structlog`), with sensitive-key
   redaction — ship to your log aggregator.
-- **Metrics**: install the `metrics` extra (`prometheus-client`) to expose
-  application metrics for Prometheus/Grafana.
+- **Metrics**: the API does not export a Prometheus endpoint yet. Until it
+  does, scrape request rate, error rate and latency from the structured access
+  logs, or put the service behind a proxy that emits RED metrics per route.
