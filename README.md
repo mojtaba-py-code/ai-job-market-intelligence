@@ -6,7 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-async-009688.svg)](https://fastapi.tiangolo.com)
 [![Code style: ruff](https://img.shields.io/badge/lint-ruff-black.svg)](https://github.com/astral-sh/ruff)
 [![Types: mypy](https://img.shields.io/badge/types-mypy-blue.svg)](https://mypy-lang.org)
-[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen.svg)](#testing--quality)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A585%25%20enforced%20in%20CI-brightgreen.svg)](#testing--quality)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A production-grade platform that ingests publicly available job postings from
@@ -258,7 +258,7 @@ make check     # all of the above, as CI runs them
 
 The suite runs against an in-memory SQLite database and mocked HTTP transports —
 no network, no external services, and no `.env` required. Current status:
-**166 tests, 89% coverage**, `ruff` clean,
+**186 tests, 89% branch coverage** (floor of 85% enforced), `ruff` clean,
 `mypy` clean, `bandit` clean, `pip-audit` clean — all enforced in CI.
 
 A large slice of the suite is adversarial: `tests/test_security_hardening.py`
