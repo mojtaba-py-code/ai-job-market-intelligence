@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Require PyJWT >= 2.14.0. PyJWT 2.13.0 has ten published advisories, among them
+  algorithm confusion and acceptance of malformed signature segments; a
+  range that still allowed it could resolve to it.
+
 ## [1.2.0] — 2026-08-15
 
 A second hardening pass, focused on what a request can *cost* and what it can
