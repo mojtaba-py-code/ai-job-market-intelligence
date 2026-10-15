@@ -395,6 +395,17 @@ class TestResponseHardening:
         html = client.get("/").text
         assert not re.search(r"<[^>]+\sstyle\s*=", html)
 
+    def test_bar_fill_is_a_block_so_its_width_applies(self, client):
+        """`.bar-fill` is a `<span>`, and width/height do nothing on an inline box.
+
+        Without `display: block` every dashboard bar rendered empty, although the
+        CSSOM width (63%, 50%, ...) was set correctly and nothing failed.
+        """
+        html = client.get("/").text
+        rule = re.search(r"\.bar-fill\s*\{([^}]*)\}", html)
+        assert rule is not None
+        assert re.search(r"display\s*:\s*(block|inline-block)", rule.group(1))
+
     def test_nonce_is_fresh_per_response(self, client):
         first = client.get("/").headers["content-security-policy"]
         second = client.get("/").headers["content-security-policy"]
